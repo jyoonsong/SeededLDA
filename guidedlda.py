@@ -244,7 +244,7 @@ class GuidedLDA:
         for it in range(self.n_iter):
             # FIXME: using numpy.roll with a random shift might be faster
             random_state.shuffle(rands)
-            if it % self.refresh == 0:
+            if self.refresh != 0 and it % self.refresh == 0:
                 ll = self.loglikelihood()
                 logger.info("<{}> log likelihood: {:.0f}".format(it, ll))
                 # keep track of loglikelihoods for monitoring convergence
@@ -346,10 +346,19 @@ class GuidedLDA:
 
         Formula used is log p(w,z) = log p(w|z) + log p(z)
         """
-        nzw, ndz, nz = self.nzw_, self.ndz_, self.nz_
+        # nzw, ndz, nz = self.nzw_, self.ndz_, self.nz_
+        # alpha = self.alpha
+        # eta = self.eta
+        # nd = np.sum(ndz, axis=1).astype(np.intc)
+        # return lda._lda._loglikelihood(nzw, ndz, nz, nd, alpha, eta)
+        
+        # Convert to Fortran order (and intc) as required by the underlying C code
+        nzw = np.asfortranarray(self.nzw_, dtype=np.intc)
+        ndz = np.ascontiguousarray(self.ndz_, dtype=np.intc)
+        nz  = np.ascontiguousarray(self.nz_,  dtype=np.intc)
+        nd  = np.ascontiguousarray(np.sum(self.ndz_, axis=1).astype(np.intc))
         alpha = self.alpha
-        eta = self.eta
-        nd = np.sum(ndz, axis=1).astype(np.intc)
+        eta   = self.eta
         return lda._lda._loglikelihood(nzw, ndz, nz, nd, alpha, eta)
 
     def _sample_topics(self, rands):
@@ -357,5 +366,9 @@ class GuidedLDA:
         n_topics, vocab_size = self.nzw_.shape
         alpha = np.repeat(self.alpha, n_topics).astype(np.float64)
         eta = np.repeat(self.eta, vocab_size).astype(np.float64)
-        lda._lda._sample_topics(self.WS, self.DS, self.ZS, self.nzw_, self.ndz_, self.nz_,
-                                            alpha, eta, rands)
+
+        nzw = np.asfortranarray(self.nzw_, dtype=np.intc)
+        ndz = np.ascontiguousarray(self.ndz_, dtype=np.intc)
+        nz  = np.ascontiguousarray(self.nz_,  dtype=np.intc)
+
+        lda._lda._sample_topics(self.WS, self.DS, self.ZS, nzw, ndz, nz, alpha, eta, rands)
